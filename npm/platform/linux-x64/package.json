@@ -1,5 +1,5 @@
 {
-  "name": "agentc-linux-x64",
+  "name": "agentc-mcp-linux-x64",
   "version": "0.1.0",
   "description": "agentc binary for linux x64 (glibc)",
   "os": ["linux"],

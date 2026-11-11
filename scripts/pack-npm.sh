@@ -27,7 +27,7 @@ stage() { # stage <npm-arch> <rust-target>
   chmod +x "$out/bin/agentc"
   cat > "$out/package.json" <<JSON
 {
-  "name": "agentc-linux-$arch",
+  "name": "agentc-mcp-linux-$arch",
   "version": "$VERSION",
   "description": "agentc binary for linux $arch (glibc)",
   "os": ["linux"],

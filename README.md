@@ -32,7 +32,7 @@ The geometry, the frame timing, and "who is in control" only exist inside the co
 ## Install
 
 ```bash
-npx agentc daemon      # no build needed, binary comes from a per-platform npm package
+npx agentc-mcp daemon      # no build needed, binary comes from a per-platform npm package
 ```
 
 or from source:
@@ -60,7 +60,7 @@ The daemon runs under `setsid`, so when the MCP client exits and the agent sessi
 ## npm packaging
 
 `npx` works because the wrapper package carries no binary: `agentc` depends on
-`agentc-linux-x64` / `agentc-linux-arm64` as `optionalDependencies`, so npm downloads only
+`agentc-mcp-linux-x64` / `agentc-mcp-linux-arm64` as `optionalDependencies`, so npm downloads only
 the one that matches the machine (`esbuild`/`swc` and friends use the same trick).
 
 ```

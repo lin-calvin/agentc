@@ -1,5 +1,5 @@
 {
-  "name": "agentc",
+  "name": "agentc-mcp",
   "version": "0.1.0",
   "description": "Headless Wayland compositor with an MCP server, built for agentic computer use",
   "keywords": [
@@ -25,7 +25,7 @@
     "node": ">=18"
   },
   "optionalDependencies": {
-    "agentc-linux-x64": "0.1.0",
-    "agentc-linux-arm64": "0.1.0"
+    "agentc-mcp-linux-x64": "0.1.0",
+    "agentc-mcp-linux-arm64": "0.1.0"
   }
 }

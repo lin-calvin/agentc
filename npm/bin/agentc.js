@@ -20,7 +20,7 @@ function platformPackage() {
   if (!glibc) {
     return { error: "musl-based systems are not supported yet (glibc build only)" };
   }
-  return { pkg: `agentc-linux-${arch}` };
+  return { pkg: `agentc-mcp-linux-${arch}` };
 }
 
 function binaryPath(pkg) {

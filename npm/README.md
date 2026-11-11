@@ -4,9 +4,9 @@ npm wrapper for [agentc](https://github.com/lin-calvin/agentc) — a headless Wa
 with an MCP server, built for agentic computer use.
 
 ```bash
-npx agentc daemon          # start the compositor + MCP + panel
-npx agentc status
-npx agentc stop
+npx agentc-mcp daemon          # start the compositor + MCP + panel
+npx agentc-mcp status
+npx agentc-mcp stop
 ```
 
 Point an MCP client at the relay (it starts the daemon on demand):
@@ -15,7 +15,7 @@ Point an MCP client at the relay (it starts the daemon on demand):
 { "mcp": { "agentc": { "type": "local", "command": ["npx", "-y", "agentc", "mcp"] } } }
 ```
 
-The actual binary lives in a per-platform package (`agentc-linux-x64`, `agentc-linux-arm64`),
+The actual binary lives in a per-platform package (`agentc-mcp-linux-x64`, `agentc-mcp-linux-arm64`),
 so only your platform is downloaded.
 
 **Requirements:** Linux with glibc and `libxkbcommon` (present on any Wayland desktop), and
