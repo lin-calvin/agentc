@@ -59,7 +59,7 @@ The daemon runs under `setsid`, so when the MCP client exits and the agent sessi
 
 ## npm packaging
 
-`npx` works because the wrapper package carries no binary: `agentc` depends on
+`npx` works because the wrapper package carries no binary: `agentc-mcp` depends on
 `agentc-mcp-linux-x64` / `agentc-mcp-linux-arm64` as `optionalDependencies`, so npm downloads only
 the one that matches the machine (`esbuild`/`swc` and friends use the same trick).
 
@@ -79,12 +79,16 @@ does the same thing from one config file.
 stdio, via the relay (recommended — it starts the daemon for you):
 
 ```jsonc
-// opencode.json
+// opencode.json — from npm
+{ "mcp": { "agentc": { "type": "local", "command": ["npx", "-y", "agentc-mcp", "mcp"] } } }
+
+// or a local build
 { "mcp": { "agentc": { "type": "local", "command": ["/abs/path/agentc", "mcp"] } } }
 ```
 
 ```bash
 claude mcp add agentc /abs/path/agentc mcp
+# or: claude mcp add agentc npx -y agentc-mcp mcp
 ```
 
 Or connect straight to HTTP if the daemon is already up:
