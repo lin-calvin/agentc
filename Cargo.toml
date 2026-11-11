@@ -1,0 +1,17 @@
+[package]
+name = "agentc"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/lin-calvin/agentc"
+description = "Headless Wayland compositor with an MCP server, built for agentic computer use"
+
+[dependencies]
+smithay = { version = "0.7", default-features = false, features = ["desktop", "wayland_frontend"] }
+serde_json = "1"
+png = "0.17"
+xkbcommon = "0.8"
+
+[[bin]]
+name = "agentc"
+path = "src/main.rs"

@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>clicktest</title></head>
+<body style="margin:0;overflow:hidden;background:#111">
+<canvas id="c" width="1280" height="720"></canvas>
+<script>
+const c = document.getElementById('c');
+const x = c.getContext('2d');
+x.fillStyle = '#222';
+x.fillRect(0, 0, 1280, 720);
+// 十字参考线
+x.strokeStyle = '#444';
+x.beginPath();
+x.moveTo(640, 0); x.lineTo(640, 720);
+x.moveTo(0, 360); x.lineTo(1280, 360);
+x.stroke();
+x.fillStyle = '#888';
+x.font = '20px monospace';
+
+document.addEventListener('click', (e) => {
+  x.fillStyle = '#0f0';
+  x.beginPath();
+  x.arc(e.clientX, e.clientY, 36, 0, 7);
+  x.fill();
+  x.fillStyle = '#000';
+  x.font = 'bold 22px monospace';
+  x.fillText(`${e.clientX},${e.clientY}`, e.clientX + 44, e.clientY + 8);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentc · live control</title>
+<style>
+  :root {
+    --bg: #101215; --panel: #171a1f; --line: #262b33;
+    --fg: #d7dde5; --muted: #7b8494; --accent: #d9a05b; --ok: #6ea86b; --bad: #c96a5a;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-bottom: 1px solid var(--line); flex: none;
+  }
+  h1 { font-size: 13px; margin: 0; font-weight: 600; letter-spacing: .04em; }
+  .pill { padding: 2px 8px; border-radius: 999px; font-size: 11px; border: 1px solid var(--line); color: var(--muted); }
+  .pill.run { color: var(--ok); border-color: #2f4030; }
+  .pill.paused { color: var(--accent); border-color: #4a3a24; }
+  .pill.off { color: var(--bad); border-color: #46282a; }
+  .spacer { flex: 1; }
+  select, button {
+    font: inherit; color: var(--fg); background: #1f242b;
+    border: 1px solid var(--line); border-radius: 4px; padding: 4px 10px;
+  }
+  select { max-width: 320px; }
+  button { cursor: pointer; }
+  button:hover { background: #262c35; }
+  button.primary { border-color: #4a3a24; color: var(--accent); }
+  button.danger { border-color: #46282a; color: var(--bad); }
+
+  #stage {
+    flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
+    padding: 10px; background:
+      repeating-conic-gradient(#0c0e11 0% 25%, #101215 0% 50%) 50% / 24px 24px;
+  }
+  #screen {
+    max-width: 100%; max-height: 100%;
+    border: 1px solid var(--line); border-radius: 3px;
+    cursor: crosshair; touch-action: none; outline: none;
+  }
+  #screen:focus { border-color: var(--accent); }
+  footer {
+    flex: none; display: flex; gap: 14px; align-items: center;
+    padding: 5px 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px;
+  }
+  #hint { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>agentc</h1>
+  <span id="state" class="pill off">connecting…</span>
+  <select id="wins"></select>
+  <button id="pause" class="primary">Pause agent</button>
+  <button id="resume">Resume</button>
+  <span class="spacer"></span>
+  <span id="fps" class="pill">– fps</span>
+</header>
+
+<div id="stage">
+  <canvas id="screen" tabindex="0" width="1280" height="720"></canvas>
+</div>
+
+<footer>
+  <span id="hint">click to take over · keyboard goes straight through · Ctrl+V pastes CJK</span>
+  <span id="log" class="spacer" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+</footer>
+
+<script>
+// ---------------------------------------------------------------- state
+let iw = 1280, ih = 720;          // current frame size
+let frames = 0, fpsTimer = performance.now();
+const canvas = document.getElementById('screen');
+const ctx = canvas.getContext('2d', { alpha: false });
+const stateEl = document.getElementById('state');
+const fpsEl = document.getElementById('fps');
+const winsEl = document.getElementById('wins');
+
+// ---------------------------------------------------------------- MCP (low-frequency state queries only)
+const mcp = async (method, params, actor = 'human') => {
+  const r = await fetch('/mcp', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-agentc-actor': actor },
+    body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params }),
+  });
+  return r.json();
+};
+const tool = async (name, args = {}) => {
+  const r = await mcp('tools/call', { name, arguments: args });
+  if (r.error) throw new Error(r.error.message);
+  const b = (r.result?.content || []).filter(x => x.type === 'text').map(x => x.text).join('\n');
+  return b;
+};
+
+// ---------------------------------------------------------------- WebSocket
+let ws = null, reconnect = 0, selected = null;
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => {
+    stateEl.textContent = 'connected';
+    stateEl.className = 'pill run';
+    if (selected !== null) send({ t: 'select', window: selected });
+  };
+  ws.onclose = () => {
+    stateEl.textContent = 'disconnected';
+    stateEl.className = 'pill off';
+    setTimeout(connect, Math.min(1000 * ++reconnect, 5000));
+  };
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    if (!msg.changed || !msg.png) return;
+    if (msg.fw !== iw || msg.fh !== ih) {
+      iw = msg.fw; ih = msg.fh;
+      canvas.width = iw; canvas.height = ih;
+    }
+    draw(msg.png, msg.x, msg.y);
+    frames++;
+  };
+}
+
+function send(obj) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+}
+
+// incremental frame: only draw the changed rect
+function draw(b64, x = 0, y = 0) {
+  const bin = atob(b64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  createImageBitmap(new Blob([buf], { type: 'image/png' }))
+    .then(bmp => { ctx.drawImage(bmp, x, y); bmp.close(); })
+    .catch(() => {});
+}
+
+setInterval(() => {
+  const now = performance.now();
+  const el = (now - fpsTimer) / 1000;
+  if (el > 0.5) {
+    fpsEl.textContent = (frames / el).toFixed(1) + ' fps';
+    frames = 0; fpsTimer = now;
+  }
+}, 500);
+
+// ---------------------------------------------------------------- coordinates
+function pos(ev) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: Math.round((ev.clientX - r.left) * iw / r.width),
+    y: Math.round((ev.clientY - r.top) * ih / r.height),
+  };
+}
+
+canvas.addEventListener('pointerdown', (ev) => {
+  canvas.focus();
+  canvas.setPointerCapture(ev.pointerId);
+  const p = pos(ev);
+  send({ t: 'down', x: p.x, y: p.y, b: ev.button });
+  ev.preventDefault();
+});
+canvas.addEventListener('pointermove', (ev) => {
+  const p = pos(ev);
+  send({ t: 'move', x: p.x, y: p.y });
+});
+canvas.addEventListener('pointerup', (ev) => {
+  const p = pos(ev);
+  send({ t: 'up', x: p.x, y: p.y, b: ev.button });
+  ev.preventDefault();
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('wheel', (ev) => {
+  const p = pos(ev);
+  send({ t: 'wheel', x: p.x, y: p.y, dy: ev.deltaY > 0 ? 1 : -1 });
+  ev.preventDefault();
+}, { passive: false });
+
+// ---------------------------------------------------------------- keyboard
+// event.code (physical key) -> xkb keycode, matching what the compositor uses
+const CODES = {
+  KeyA: 38, KeyB: 56, KeyC: 54, KeyD: 40, KeyE: 26, KeyF: 41, KeyG: 42, KeyH: 43,
+  KeyI: 31, KeyJ: 44, KeyK: 45, KeyL: 46, KeyM: 58, KeyN: 57, KeyO: 32, KeyP: 33,
+  KeyQ: 24, KeyR: 27, KeyS: 39, KeyT: 28, KeyU: 30, KeyV: 55, KeyW: 25, KeyX: 53,
+  KeyY: 29, KeyZ: 52,
+  Digit1: 10, Digit2: 11, Digit3: 12, Digit4: 13, Digit5: 14,
+  Digit6: 15, Digit7: 16, Digit8: 17, Digit9: 18, Digit0: 19,
+  Enter: 36, Escape: 9, Backspace: 22, Tab: 23, Space: 65,
+  ShiftLeft: 50, ShiftRight: 62, ControlLeft: 37, ControlRight: 105,
+  AltLeft: 64, AltRight: 108, MetaLeft: 133, MetaRight: 134,
+  ArrowUp: 111, ArrowDown: 116, ArrowLeft: 113, ArrowRight: 114,
+  Home: 110, End: 115, PageUp: 112, PageDown: 117, Insert: 118, Delete: 119,
+  Minus: 20, Equal: 21, BracketLeft: 34, BracketRight: 35, Backslash: 51,
+  Semicolon: 47, Quote: 48, Backquote: 49, Comma: 59, Period: 60, Slash: 61,
+  F1: 67, F2: 68, F3: 69, F4: 70, F5: 71, F6: 72,
+  F7: 73, F8: 74, F9: 75, F10: 76, F11: 95, F12: 96,
+};
+
+canvas.addEventListener('keydown', (ev) => {
+  // Ctrl/Cmd+V is handled by the paste event
+  if ((ev.ctrlKey || ev.metaKey) && ev.code === 'KeyV') return;
+  const code = CODES[ev.code];
+  if (code === undefined) return;
+  send({ t: 'keydown', code });
+  ev.preventDefault();
+});
+canvas.addEventListener('keyup', (ev) => {
+  if ((ev.ctrlKey || ev.metaKey) && ev.code === 'KeyV') return;
+  const code = CODES[ev.code];
+  if (code === undefined) return;
+  send({ t: 'keyup', code });
+  ev.preventDefault();
+});
+
+// paste / IME commit -> let the remote side paste from its clipboard (how CJK gets in)
+canvas.addEventListener('paste', (ev) => {
+  const text = ev.clipboardData.getData('text');
+  if (text) send({ t: 'text', text });
+  ev.preventDefault();
+});
+canvas.addEventListener('compositionend', (ev) => {
+  if (ev.data) send({ t: 'text', text: ev.data });
+});
+
+// ---------------------------------------------------------------- state polling (low frequency)
+async function pollState() {
+  try {
+    const st = JSON.parse(await tool('status'));
+    const paused = st.paused;
+    stateEl.textContent = paused ? 'PAUSED · human in control' : 'RUNNING · agent free';
+    stateEl.className = 'pill ' + (paused ? 'paused' : 'run');
+
+    const ids = st.windows.map(w => w.id).join(',');
+    if (winsEl.dataset.ids !== ids) {
+      winsEl.dataset.ids = ids;
+      winsEl.innerHTML = st.windows
+        .map(w => `<option value="${w.id}">#${w.id} ${w.title || w.app_id || 'untitled'} (${w.w}×${w.h})</option>`)
+        .join('');
+      if (selected === null && st.windows.length) selectWindow(st.windows[0].id);
+      else if (selected !== null) winsEl.value = String(selected);
+    }
+    const last = (st.log || []).slice(-1)[0] || '';
+    document.getElementById('log').textContent = last;
+  } catch (e) {
+    stateEl.textContent = 'daemon unreachable';
+    stateEl.className = 'pill off';
+  }
+}
+
+function selectWindow(id) {
+  selected = id;
+  winsEl.value = String(id);
+  // clear first: otherwise the new window's delta is drawn over the old window's pixels
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  send({ t: 'select', window: id });
+}
+
+winsEl.onchange = () => selectWindow(parseInt(winsEl.value, 10));
+document.getElementById('pause').onclick = () => { send({ t: 'control', action: 'pause' }); setTimeout(pollState, 150); };
+document.getElementById('resume').onclick = () => { send({ t: 'control', action: 'resume' }); setTimeout(pollState, 150); };
+
+(async () => {
+  await mcp('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'agentc-panel', version: '2' } });
+  connect();
+  await pollState();
+  setInterval(pollState, 1500);
+  canvas.focus();
+})();
+</script>
+</body>
+</html>

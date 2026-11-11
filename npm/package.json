@@ -1,0 +1,31 @@
+{
+  "name": "agentc",
+  "version": "0.1.0",
+  "description": "Headless Wayland compositor with an MCP server, built for agentic computer use",
+  "keywords": [
+    "wayland",
+    "compositor",
+    "mcp",
+    "computer-use",
+    "agent"
+  ],
+  "homepage": "https://github.com/lin-calvin/agentc",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lin-calvin/agentc.git"
+  },
+  "license": "MIT",
+  "bin": {
+    "agentc": "bin/agentc.js"
+  },
+  "files": [
+    "bin/agentc.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "agentc-linux-x64": "0.1.0",
+    "agentc-linux-arm64": "0.1.0"
+  }
+}
