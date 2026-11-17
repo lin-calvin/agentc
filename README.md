@@ -116,6 +116,7 @@ Coordinates are always window-local, `(0,0)` is the window's top-left.
 | `wait_for_change {timeout_ms?}` | blocks until the screen changes, returns the new frame |
 | `wait_for_idle {quiet_ms?,grace_ms?}` | blocks until the screen settles — use instead of sleeping |
 | `wait_for_window {timeout_ms?,after_id?}` | blocks until a new window appears |
+| `get_wayland_info` | `WAYLAND_DISPLAY` / `XDG_RUNTIME_DIR` and a ready-to-use `env ...` prefix, so the agent can start GUI apps with its own shell |
 | `set_size {width,height}` | resize the virtual screen; invalidates old coordinates |
 | `set_mode {mode}` | `windowed` / `maximized` (default) / `fullscreen` |
 | `launch {argv,wait_ms?}` | spawns and waits for the window |

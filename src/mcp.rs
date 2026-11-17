@@ -384,7 +384,8 @@ fn instructions() -> &'static str {
      Windows are maximized by default. Use set_mode/fullscreen if you really want no chrome, \
      but note that browser fullscreen hides the address bar and tab strip.\n\
      After `set_size` all previous coordinates are invalid, so take a fresh screenshot.\n\
-     If a tool returns PAUSED, a human took over: stop and wait, do not retry."
+     If you would rather drive a shell yourself (pipes, cwd, env), call `get_wayland_info` and \
+     prefix your command with the returned env — the window then appears in this desktop.\n     If a tool returns PAUSED, a human took over: stop and wait, do not retry."
 }
 
 // ------------------------------------------------------------------ tools
@@ -573,6 +574,14 @@ fn tool_schemas(actor: &str) -> Vec<Value> {
             }),
         ),
         tool(
+            "get_wayland_info",
+            "Environment for running GUI programs yourself: WAYLAND_DISPLAY, XDG_RUNTIME_DIR, \
+             and a ready-to-use `env ...` prefix. Use it to launch things with your own shell \
+             instead of the launch tool (pipes, cwd, env vars, ...), and the window will appear \
+             inside this virtual desktop.",
+            json!({"type": "object", "properties": {}}),
+        ),
+        tool(
             "wait_for_window",
             "Wait for a new window to appear (e.g. a dialog after clicking a button). Returns its info.",
             json!({
@@ -698,6 +707,7 @@ fn call_tool(
             serde_json::to_string(args.get("argv").unwrap_or(&json!([]))).unwrap_or_default(),
             args.get("wait_ms").and_then(|v| v.as_i64()).unwrap_or(3000)
         ),
+        "get_wayland_info" => "{\"cmd\":\"wayland_info\"}".to_string(),
         "wait_for_window" => format!(
             "{{\"cmd\":\"wait_for_window\",\"timeout_ms\":{},\"after_id\":{},\"app_id\":{}}}",
             args.get("timeout_ms").and_then(|v| v.as_i64()).unwrap_or(3000),
@@ -810,6 +820,19 @@ fn describe(name: &str, v: &Value) -> String {
                 w.get("h").and_then(|x| x.as_i64()).unwrap_or(0)
             ),
         };
+    }
+    if name == "get_wayland_info" {
+        let prefix = v.get("env_prefix").and_then(|x| x.as_str()).unwrap_or("");
+        return format!(
+            "{prefix} <your command>\n\n{}",
+            serde_json::to_string_pretty(&json!({
+                "WAYLAND_DISPLAY": v.get("wayland_display"),
+                "XDG_RUNTIME_DIR": v.get("xdg_runtime_dir"),
+                "socket": v.get("wayland_socket"),
+                "note": "DISPLAY is intentionally unset so apps do not attach to the host X11/GNOME session"
+            }))
+            .unwrap_or_default()
+        );
     }
     if v.get("changed").is_none() && v.get("settled").is_none() {
         return "ok".to_string();

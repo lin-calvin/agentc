@@ -2407,6 +2407,27 @@ fn handle_cmd(state: &mut Agent, cmd: &str, reply: std_mpsc::Sender<String>) -> 
         return None;
     }
 
+    if op == "wayland_info" {
+        let rt = shim::runtime_dir();
+        let sock = rt.join(&state.socket_name);
+        // 给 agent 的 bash 用：把 DISPLAY 去掉，否则应用会连到用户的 GNOME/X11
+        let env_prefix = format!(
+            "env -u DISPLAY XDG_RUNTIME_DIR={} WAYLAND_DISPLAY={} GDK_BACKEND=wayland QT_QPA_PLATFORM=wayland",
+            rt.display(),
+            state.socket_name
+        );
+        return Some(format!(
+            "{{\"ok\":true,\"wayland_display\":\"{d}\",\"xdg_runtime_dir\":\"{rt}\",\
+             \"wayland_socket\":\"{sock}\",\"xdg_session_type\":\"wayland\",\"display\":null,\
+             \"daemon_pid\":{pid},\"env_prefix\":\"{env}\"}}",
+            d = state.socket_name,
+            rt = rt.display(),
+            sock = sock.display(),
+            pid = std::process::id(),
+            env = env_prefix
+        ));
+    }
+
     if op == "events" {
         let since = v.get("since").and_then(|x| x.as_u64()).unwrap_or(0);
         let items: Vec<String> = state
