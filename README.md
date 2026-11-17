@@ -104,6 +104,7 @@ Coordinates are always window-local, `(0,0)` is the window's top-left.
 | Tool | Notes |
 |---|---|
 | `screenshot {window?}` | PNG + `window id, WxH, revision N` |
+| `save_screenshot {window?,path?,region?}` | writes a PNG to disk and returns the path, so the agent's own shell can diff/crop/OCR it without spending image tokens |
 | `windows` | id / app_id / title / size / mode / revision / dialog |
 | `focus {window}` | keyboard focus |
 | `click {x,y,button?,duration_ms?}` | `duration_ms` = how long the press lasts (default 60) |

@@ -574,6 +574,20 @@ fn tool_schemas(actor: &str) -> Vec<Value> {
             }),
         ),
         tool(
+            "save_screenshot",
+            "Write a window screenshot to a PNG file and return its path. Use this when you \
+             want to post-process the image with your own shell (crop, diff, OCR) instead of \
+             paying image tokens for it. Optional `region` crops to [x,y,w,h].",
+            json!({
+                "type": "object",
+                "properties": {
+                    "window": {"type": "integer"},
+                    "path": {"type": "string", "description": "defaults to $XDG_RUNTIME_DIR/agentc-<win>-<ms>.png"},
+                    "region": {"type": "array", "items": {"type": "integer"}, "description": "[x, y, w, h]"}
+                }
+            }),
+        ),
+        tool(
             "get_wayland_info",
             "Environment for running GUI programs yourself: WAYLAND_DISPLAY, XDG_RUNTIME_DIR, \
              and a ready-to-use `env ...` prefix. Use it to launch things with your own shell \
@@ -707,6 +721,21 @@ fn call_tool(
             serde_json::to_string(args.get("argv").unwrap_or(&json!([]))).unwrap_or_default(),
             args.get("wait_ms").and_then(|v| v.as_i64()).unwrap_or(3000)
         ),
+        "save_screenshot" => format!(
+            "{{\"cmd\":\"screenshot\",\"b64\":false,\"path\":{},\"region\":{}{win_part}}}",
+            serde_json::to_string(
+                args.get("path")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or(&format!(
+                        "{}/agentc-shot-{}.png",
+                        crate::shim::runtime_dir().display(),
+                        std::process::id()
+                    ))
+            )
+            .unwrap_or_else(|_| "\"agentc-shot.png\"".into()),
+            serde_json::to_string(args.get("region").unwrap_or(&json!(null)))
+                .unwrap_or_else(|_| "null".into())
+        ),
         "get_wayland_info" => "{\"cmd\":\"wayland_info\"}".to_string(),
         "wait_for_window" => format!(
             "{{\"cmd\":\"wait_for_window\",\"timeout_ms\":{},\"after_id\":{},\"app_id\":{}}}",
@@ -820,6 +849,14 @@ fn describe(name: &str, v: &Value) -> String {
                 w.get("h").and_then(|x| x.as_i64()).unwrap_or(0)
             ),
         };
+    }
+    if name == "save_screenshot" {
+        return format!(
+            "{} ({}x{})",
+            v.get("path").and_then(|x| x.as_str()).unwrap_or(""),
+            v.get("w").and_then(|x| x.as_i64()).unwrap_or(0),
+            v.get("h").and_then(|x| x.as_i64()).unwrap_or(0)
+        );
     }
     if name == "get_wayland_info" {
         let prefix = v.get("env_prefix").and_then(|x| x.as_str()).unwrap_or("");

@@ -2175,6 +2175,27 @@ fn encode_png_region(
 /// - the canvas is always opaque, so RGB instead of RGBA means 25% less data to filter
 ///   and compress
 /// - `fast` is for the live stream (lower zlib level: faster, slightly larger)
+/// Crop an RGBA canvas; out-of-bounds parts come back black.
+fn crop_rgba(src: &[u8], w: u32, h: u32, x: i32, y: i32, cw: u32, ch: u32) -> Vec<u8> {
+    let mut out = vec![0u8; (cw as usize) * (ch as usize) * 4];
+    for row in 0..ch as i32 {
+        let sy = y + row;
+        if sy < 0 || sy >= h as i32 {
+            continue;
+        }
+        for col in 0..cw as i32 {
+            let sx = x + col;
+            if sx < 0 || sx >= w as i32 {
+                continue;
+            }
+            let si = ((sy as u32 * w + sx as u32) * 4) as usize;
+            let di = ((row as u32 * cw + col as u32) * 4) as usize;
+            out[di..di + 4].copy_from_slice(&src[si..si + 4]);
+        }
+    }
+    out
+}
+
 fn encode_png(rgba: &[u8], w: u32, h: u32, fast: bool) -> std::io::Result<Vec<u8>> {
     let px = (w as usize) * (h as usize);
     let mut rgb = Vec::with_capacity(px * 3);
@@ -2622,8 +2643,22 @@ fn dispatch(state: &mut Agent, op: &str, v: &serde_json::Value, win: u32, _actor
         ),
         "screenshot" => {
             let want_b64 = v.get("b64").and_then(|x| x.as_bool()).unwrap_or(false);
+            // optional region: [x, y, w, h] in window coordinates
+            let region: Option<(i32, i32, u32, u32)> = v.get("region").and_then(|r| {
+                let a = r.as_array()?;
+                Some((
+                    a.first()?.as_i64()? as i32,
+                    a.get(1)?.as_i64()? as i32,
+                    a.get(2)?.as_i64()?.max(1) as u32,
+                    a.get(3)?.as_i64()?.max(1) as u32,
+                ))
+            });
             match state.render_window(win) {
                 Some((data, w, h)) => {
+                    let (data, w, h) = match region {
+                        Some((rx, ry, rw, rh)) => (crop_rgba(&data, w, h, rx, ry, rw, rh), rw, rh),
+                        None => (data, w, h),
+                    };
                     let rev = state
                         .windows
                         .iter()
@@ -2748,12 +2783,5 @@ fn dispatch(state: &mut Agent, op: &str, v: &serde_json::Value, win: u32, _actor
 }
 
 fn write_png(path: &str, rgba: &[u8], w: u32, h: u32) -> std::io::Result<()> {
-    let file = std::fs::File::create(path)?;
-    let wtr = std::io::BufWriter::new(file);
-    let mut enc = png::Encoder::new(wtr, w, h);
-    enc.set_color(png::ColorType::Rgba);
-    enc.set_depth(png::BitDepth::Eight);
-    let mut writer = enc.write_header()?;
-    writer.write_image_data(rgba)?;
-    Ok(())
+    std::fs::write(path, encode_png(rgba, w, h, false)?)
 }
